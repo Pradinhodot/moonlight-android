@@ -623,39 +623,32 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                 short maxCll = hdrMetadata.getShort();      // Max content light level (1 cd/m2)
                 short maxFall = hdrMetadata.getShort();     // Max frame-average light level (1 cd/m2)
 
-                // Washed-out HDR fix: hosts frequently advertise bogus mastering luminance
-                // (e.g. 5600 or 0 nits) which makes the panel tone-map to a fake ceiling and
-                // look dark/desaturated. Prefer this display's real luminance so it tone-maps
-                // to its own range. Primaries/white point are left as the host sent them.
+                // Washed-out HDR fix. The host can send bogus mastering luminance (e.g. 0 or
+                // 5600 nits) that breaks the panel's tone-mapping. BUT Android's panel
+                // "desired max" (~450 nits on the S24) is far below the real HDR peak (~1300+),
+                // so we must NOT clamp to it. Strategy: trust the host when it's in a sane HDR
+                // range, and only replace clearly-bogus values with a good target for this panel.
+                final int HDR_TARGET_PEAK = 1000;   // nits used when the host value is bogus (S24 peaks ~1300+; tweak to taste)
+                final int SANE_MIN = 100;            // nits
+                final int SANE_MAX = 4000;           // nits
                 Display.HdrCapabilities caps = getDisplayHdrCapabilities();
-                if (caps != null) {
-                    float pMax = caps.getDesiredMaxLuminance();
-                    float pAvg = caps.getDesiredMaxAverageLuminance();
-                    float pMin = caps.getDesiredMinLuminance();
-                    if (pMax > 0) {
-                        int hostMax = maxMaster & 0xFFFF;
-                        if (hostMax <= 0 || hostMax > pMax) {
-                            maxMaster = (short) Math.round(pMax);
-                        }
-                        int hostCll = maxCll & 0xFFFF;
-                        if (hostCll <= 0 || hostCll > pMax) {
-                            maxCll = (short) Math.round(pMax);
-                        }
-                    }
-                    if (pAvg > 0) {
-                        int hostFall = maxFall & 0xFFFF;
-                        if (hostFall <= 0 || hostFall > pAvg) {
-                            maxFall = (short) Math.round(pAvg);
-                        }
-                    }
-                    if (pMin >= 0 && (minMaster & 0xFFFF) == 0) {
-                        minMaster = (short) Math.round(pMin * 10000.0f);
-                    }
-                    LimeLog.info("HDR metadata override applied: maxMaster=" + (maxMaster & 0xFFFF)
-                            + " minMaster=" + (minMaster & 0xFFFF) + " maxCLL=" + (maxCll & 0xFFFF)
-                            + " maxFALL=" + (maxFall & 0xFFFF) + " (panel max=" + pMax
-                            + " avg=" + pAvg + " min=" + pMin + " nits)");
+                int hostMax = maxMaster & 0xFFFF;
+                if (hostMax < SANE_MIN || hostMax > SANE_MAX) {
+                    maxMaster = (short) HDR_TARGET_PEAK;
                 }
+                int hostCll = maxCll & 0xFFFF;
+                if (hostCll < SANE_MIN || hostCll > SANE_MAX) {
+                    maxCll = (short) HDR_TARGET_PEAK;
+                }
+                int hostFall = maxFall & 0xFFFF;
+                if (hostFall < 1 || hostFall > SANE_MAX) {
+                    maxFall = (short) (HDR_TARGET_PEAK / 2);
+                }
+                LimeLog.info("HDR metadata: applied maxMaster=" + (maxMaster & 0xFFFF)
+                        + " minMaster=" + (minMaster & 0xFFFF) + " maxCLL=" + (maxCll & 0xFFFF)
+                        + " maxFALL=" + (maxFall & 0xFFFF) + " (host sent max=" + hostMax
+                        + ", cll=" + hostCll + ", fall=" + hostFall
+                        + "; panel desired max=" + (caps != null ? caps.getDesiredMaxLuminance() : -1f) + " nits)");
 
                 // Create a HDMI Dynamic Range and Mastering InfoFrame as defined by CTA-861.3
                 hdrStaticInfo.put((byte) 0); // Metadata type
