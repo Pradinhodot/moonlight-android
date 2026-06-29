@@ -211,6 +211,19 @@
             android:title="@string/title_enable_hdr"
             app:iconSpaceReserved="false" />
 
+        <com.limelight.preferences.SeekBarPreference
+            android:dialogMessage="@string/summary_seekbar_hdr_peak"
+            android:key="seekbar_hdr_peak_nits"
+            android:max="2000"
+            android:summary="@string/summary_seekbar_hdr_peak"
+            android:text="@string/suffix_seekbar_hdr_peak"
+            android:title="@string/title_seekbar_hdr_peak"
+            app:iconSpaceReserved="false"
+            seekbar:divisor="1"
+            seekbar:keyStep="50"
+            seekbar:min="0"
+            seekbar:step="50" />
+
         <CheckBoxPreference
             android:defaultValue="false"
             android:key="checkbox_enable_fullexdisplay"

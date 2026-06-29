@@ -628,23 +628,36 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                 // "desired max" (~450 nits on the S24) is far below the real HDR peak (~1300+),
                 // so we must NOT clamp to it. Strategy: trust the host when it's in a sane HDR
                 // range, and only replace clearly-bogus values with a good target for this panel.
-                final int HDR_TARGET_PEAK = 1000;   // nits used when the host value is bogus (S24 peaks ~1300+; tweak to taste)
+                // Settings slider "HDR peak brightness":
+                //   0  = Automatic (trust the host when sane, replace only bogus values)
+                //   >0 = force this mastering peak (manual calibration by eye)
+                final int HDR_TARGET_PEAK = 1000;   // auto fallback when the host value is bogus
                 final int SANE_MIN = 100;            // nits
                 final int SANE_MAX = 4000;           // nits
+                int userPeak = (prefs != null) ? prefs.hdrPeakNits : 0;
                 Display.HdrCapabilities caps = getDisplayHdrCapabilities();
                 int hostMax = maxMaster & 0xFFFF;
-                if (hostMax < SANE_MIN || hostMax > SANE_MAX) {
-                    maxMaster = (short) HDR_TARGET_PEAK;
-                }
                 int hostCll = maxCll & 0xFFFF;
-                if (hostCll < SANE_MIN || hostCll > SANE_MAX) {
-                    maxCll = (short) HDR_TARGET_PEAK;
-                }
                 int hostFall = maxFall & 0xFFFF;
-                if (hostFall < 1 || hostFall > SANE_MAX) {
-                    maxFall = (short) (HDR_TARGET_PEAK / 2);
+                if (userPeak >= SANE_MIN) {
+                    // Manual override from settings.
+                    maxMaster = (short) userPeak;
+                    maxCll = (short) userPeak;
+                    maxFall = (short) (userPeak / 2);
+                } else {
+                    // Automatic: trust sane host values, replace clearly-bogus ones.
+                    if (hostMax < SANE_MIN || hostMax > SANE_MAX) {
+                        maxMaster = (short) HDR_TARGET_PEAK;
+                    }
+                    if (hostCll < SANE_MIN || hostCll > SANE_MAX) {
+                        maxCll = (short) HDR_TARGET_PEAK;
+                    }
+                    if (hostFall < 1 || hostFall > SANE_MAX) {
+                        maxFall = (short) (HDR_TARGET_PEAK / 2);
+                    }
                 }
-                LimeLog.info("HDR metadata: applied maxMaster=" + (maxMaster & 0xFFFF)
+                LimeLog.info("HDR metadata: mode=" + (userPeak >= SANE_MIN ? ("force " + userPeak) : "auto")
+                        + " applied maxMaster=" + (maxMaster & 0xFFFF)
                         + " minMaster=" + (minMaster & 0xFFFF) + " maxCLL=" + (maxCll & 0xFFFF)
                         + " maxFALL=" + (maxFall & 0xFFFF) + " (host sent max=" + hostMax
                         + ", cll=" + hostCll + ", fall=" + hostFall

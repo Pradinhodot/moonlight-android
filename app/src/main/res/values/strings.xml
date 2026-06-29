@@ -306,6 +306,9 @@
     <string name="summary_video_format">Newer codecs can lower video bandwidth requirements if your device supports them. Codec selections may be ignored if not supported by the host software or GPU.</string>
     <string name="title_enable_hdr">Enable HDR (Experimental)</string>
     <string name="summary_enable_hdr">Stream HDR when the game and PC GPU support it. HDR requires a GPU with HEVC Main 10 encoding support.</string>
+    <string name="title_seekbar_hdr_peak">HDR peak brightness</string>
+    <string name="summary_seekbar_hdr_peak">Mastering peak luminance sent to the display for HDR tone-mapping. 0 = Automatic (use the host value, fixing bogus ones). Raise for brighter highlights, lower if HDR looks blown out. The S24 Ultra peaks around 1300 nits.</string>
+    <string name="suffix_seekbar_hdr_peak">nits</string>
     <string name="title_full_range">Force full range video (Experimental)</string>
     <string name="summary_full_range">This will cause loss of detail in light and dark areas if your device doesn\'t properly display full range video content.</string>
     <string name="title_prevent_packet_loss">Prevent Packet Loss</string>
