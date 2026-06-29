@@ -93,8 +93,21 @@ android {
         }
     }
 
+    signingConfigs {
+        artemishdr {
+            storeFile file("artemis-hdr.keystore")
+            storePassword "artemishdr"
+            keyAlias "artemishdr"
+            keyPassword "artemishdr"
+        }
+    }
+
     buildTypes {
         debug {
+            // Fixed signing so every CI build uses the SAME key -> updates install over
+            // the previous Artemis HDR without uninstalling or re-pairing.
+            signingConfig signingConfigs.artemishdr
+
             // Custom identity so this build installs ALONGSIDE the official Artemis
             // (com.limelight.noir) instead of replacing it. Different applicationId +
             // different name = a separate app on the phone.
