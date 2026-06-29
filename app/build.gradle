@@ -95,10 +95,13 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix ".noirdebug"
-            resValue "string", "app_label", "Diana"
-            resValue "string", "app_label_root", "Diana (Root)"
-            resValue "string", "app_label_game", "Diana (Game)"
+            // Custom identity so this build installs ALONGSIDE the official Artemis
+            // (com.limelight.noir) instead of replacing it. Different applicationId +
+            // different name = a separate app on the phone.
+            applicationIdSuffix ".hdr"
+            resValue "string", "app_label", "Artemis HDR"
+            resValue "string", "app_label_root", "Artemis HDR (Root)"
+            resValue "string", "app_label_game", "Artemis HDR (Game)"
 
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

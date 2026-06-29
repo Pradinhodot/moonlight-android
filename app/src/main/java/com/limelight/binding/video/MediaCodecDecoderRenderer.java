@@ -27,6 +27,7 @@ import android.util.LongSparseArray;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
+import android.view.Display;
 import android.media.MediaCodec;
 import android.os.Bundle;
 import android.media.MediaCodecInfo;
@@ -569,9 +570,36 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                         break;
                 }
             }
+            else {
+                // HDR10 (10-bit): force BT.2020 primaries + ST.2084 (PQ) transfer so the
+                // decoder/display interpret the signal as wide-gamut PQ instead of falling
+                // back to Rec.709/SDR. Relying on bitstream auto-detection is fragile on some
+                // devices and is a common cause of washed-out / dark HDR over streaming.
+                videoFormat.setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT2020);
+                videoFormat.setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_ST2084);
+            }
         }
 
         return videoFormat;
+    }
+
+    // Returns the HDR capabilities of the display this stream is shown on, or null if
+    // unavailable. Used to correct bogus host mastering-luminance metadata so the panel
+    // tone-maps HDR to its own real range instead of a fake ceiling (washed-out fix).
+    private Display.HdrCapabilities getDisplayHdrCapabilities() {
+        try {
+            Display display = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && context != null) {
+                display = context.getDisplay();
+            }
+            if (display == null && activity != null) {
+                display = activity.getWindowManager().getDefaultDisplay();
+            }
+            return display != null ? display.getHdrCapabilities() : null;
+        } catch (Throwable t) {
+            LimeLog.warning("Unable to query display HDR capabilities: " + t.getMessage());
+            return null;
+        }
     }
 
     private void configureAndStartDecoder(MediaFormat format) {
@@ -581,20 +609,68 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                 ByteBuffer hdrStaticInfo = ByteBuffer.allocate(25).order(ByteOrder.LITTLE_ENDIAN);
                 ByteBuffer hdrMetadata = ByteBuffer.wrap(currentHdrMetadata).order(ByteOrder.LITTLE_ENDIAN);
 
+                // Read the host-provided values first (CTA-861.3 order).
+                short rx = hdrMetadata.getShort();
+                short ry = hdrMetadata.getShort();
+                short gx = hdrMetadata.getShort();
+                short gy = hdrMetadata.getShort();
+                short bx = hdrMetadata.getShort();
+                short by = hdrMetadata.getShort();
+                short wx = hdrMetadata.getShort();
+                short wy = hdrMetadata.getShort();
+                short maxMaster = hdrMetadata.getShort();  // Max mastering luminance (1 cd/m2)
+                short minMaster = hdrMetadata.getShort();  // Min mastering luminance (0.0001 cd/m2)
+                short maxCll = hdrMetadata.getShort();      // Max content light level (1 cd/m2)
+                short maxFall = hdrMetadata.getShort();     // Max frame-average light level (1 cd/m2)
+
+                // Washed-out HDR fix: hosts frequently advertise bogus mastering luminance
+                // (e.g. 5600 or 0 nits) which makes the panel tone-map to a fake ceiling and
+                // look dark/desaturated. Prefer this display's real luminance so it tone-maps
+                // to its own range. Primaries/white point are left as the host sent them.
+                Display.HdrCapabilities caps = getDisplayHdrCapabilities();
+                if (caps != null) {
+                    float pMax = caps.getDesiredMaxLuminance();
+                    float pAvg = caps.getDesiredMaxAverageLuminance();
+                    float pMin = caps.getDesiredMinLuminance();
+                    if (pMax > 0) {
+                        int hostMax = maxMaster & 0xFFFF;
+                        if (hostMax <= 0 || hostMax > pMax) {
+                            maxMaster = (short) Math.round(pMax);
+                        }
+                        int hostCll = maxCll & 0xFFFF;
+                        if (hostCll <= 0 || hostCll > pMax) {
+                            maxCll = (short) Math.round(pMax);
+                        }
+                    }
+                    if (pAvg > 0) {
+                        int hostFall = maxFall & 0xFFFF;
+                        if (hostFall <= 0 || hostFall > pAvg) {
+                            maxFall = (short) Math.round(pAvg);
+                        }
+                    }
+                    if (pMin >= 0 && (minMaster & 0xFFFF) == 0) {
+                        minMaster = (short) Math.round(pMin * 10000.0f);
+                    }
+                    LimeLog.info("HDR metadata override applied: maxMaster=" + (maxMaster & 0xFFFF)
+                            + " minMaster=" + (minMaster & 0xFFFF) + " maxCLL=" + (maxCll & 0xFFFF)
+                            + " maxFALL=" + (maxFall & 0xFFFF) + " (panel max=" + pMax
+                            + " avg=" + pAvg + " min=" + pMin + " nits)");
+                }
+
                 // Create a HDMI Dynamic Range and Mastering InfoFrame as defined by CTA-861.3
                 hdrStaticInfo.put((byte) 0); // Metadata type
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // RX
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // RY
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // GX
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // GY
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // BX
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // BY
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // White X
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // White Y
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // Max mastering luminance
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // Min mastering luminance
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // Max content luminance
-                hdrStaticInfo.putShort(hdrMetadata.getShort()); // Max frame average luminance
+                hdrStaticInfo.putShort(rx);
+                hdrStaticInfo.putShort(ry);
+                hdrStaticInfo.putShort(gx);
+                hdrStaticInfo.putShort(gy);
+                hdrStaticInfo.putShort(bx);
+                hdrStaticInfo.putShort(by);
+                hdrStaticInfo.putShort(wx);
+                hdrStaticInfo.putShort(wy);
+                hdrStaticInfo.putShort(maxMaster);
+                hdrStaticInfo.putShort(minMaster);
+                hdrStaticInfo.putShort(maxCll);
+                hdrStaticInfo.putShort(maxFall);
 
                 hdrStaticInfo.rewind();
                 format.setByteBuffer(MediaFormat.KEY_HDR_STATIC_INFO, hdrStaticInfo);
