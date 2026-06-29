@@ -185,8 +185,19 @@ public class AndroidAudioRenderer implements AudioRenderer {
         return 0;
     }
 
+    private boolean audioThreadPrioritySet = false;
+
     @Override
     public void playDecodedAudio(short[] audioData) {
+        // Raise the audio output thread to urgent real-time priority once, so audio
+        // doesn't glitch under load (ported from derflacco's fork). Safe no-op on failure.
+        if (!audioThreadPrioritySet) {
+            audioThreadPrioritySet = true;
+            try {
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
+            } catch (Throwable ignored) {}
+        }
+
         // Only queue up to 40 ms of pending audio data in addition to what AudioTrack is buffering for us.
         if (MoonBridge.getPendingAudioDuration() < 40) {
             // This will block until the write is completed. That can cause a backlog
