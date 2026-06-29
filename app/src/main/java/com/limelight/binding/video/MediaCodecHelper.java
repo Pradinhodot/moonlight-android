@@ -622,6 +622,12 @@ public class MediaCodecHelper {
                     videoFormat.setInteger("vendor.qti-ext-output-fence.fence_type", 1); // Snapdragon 8s Gen 3 and ELite / 0 = none, 1 = sw, 2 = hw, 3 = hybrid. Best option = 1
                     ////////////////////////////////////////////////////////////////////////////////
 
+                    // Reduce the decoder's DPB output buffering delay for lower end-to-end latency
+                    // on the modern c2.qti (Adreno/Snapdragon) AV1/HEVC decoder. This was previously
+                    // only applied to legacy omx.qcom; here it also covers c2.qti. Best-effort: if the
+                    // decoder rejects it, the tryNumber>=5 retry path omits it and still configures.
+                    videoFormat.setInteger("vendor.qti-ext-dec-dpb-output-delay.enable", 0);
+
                     setNewOption = true;
                 }
             }
