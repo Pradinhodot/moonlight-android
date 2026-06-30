@@ -622,11 +622,12 @@ public class MediaCodecHelper {
                     videoFormat.setInteger("vendor.qti-ext-output-fence.fence_type", 1); // Snapdragon 8s Gen 3 and ELite / 0 = none, 1 = sw, 2 = hw, 3 = hybrid. Best option = 1
                     ////////////////////////////////////////////////////////////////////////////////
 
-                    // Reduce the decoder's DPB output buffering delay for lower end-to-end latency
-                    // on the modern c2.qti (Adreno/Snapdragon) AV1/HEVC decoder. This was previously
-                    // only applied to legacy omx.qcom; here it also covers c2.qti. Best-effort: if the
-                    // decoder rejects it, the tryNumber>=5 retry path omits it and still configures.
-                    videoFormat.setInteger("vendor.qti-ext-dec-dpb-output-delay.enable", 0);
+                    // Fluidity-first: we intentionally do NOT force
+                    // vendor.qti-ext-dec-dpb-output-delay.enable=0 on c2.qti here. Zeroing the DPB
+                    // output delay minimizes latency but removes the decoder's small output cushion,
+                    // which HURTS smoothness under network jitter on the S24 (c2.qti) -- this was the
+                    // main behavioural difference vs stock Artemis on this decoder. Let the decoder
+                    // keep its default output delay. (Legacy omx.qcom still gets it in its own block.)
 
                     setNewOption = true;
                 }
