@@ -116,6 +116,7 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     private final ArrayList<byte[]> ppsBuffers = new ArrayList<>();
     private boolean submittedCsd;
     private byte[] currentHdrMetadata;
+    private volatile int liveHdrPeakNits = -1; // -1 = use the preference; >=0 = live in-stream override
 
     private int nextInputBufferIndex = -1;
     private ByteBuffer nextInputBuffer;
@@ -634,7 +635,7 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                 final int HDR_TARGET_PEAK = 1000;   // auto fallback when the host value is bogus
                 final int SANE_MIN = 100;            // nits
                 final int SANE_MAX = 4000;           // nits
-                int userPeak = (prefs != null) ? prefs.hdrPeakNits : 0;
+                int userPeak = (liveHdrPeakNits >= 0) ? liveHdrPeakNits : ((prefs != null) ? prefs.hdrPeakNits : 0);
                 Display.HdrCapabilities caps = getDisplayHdrCapabilities();
                 int hostMax = maxMaster & 0xFFFF;
                 int hostCll = maxCll & 0xFFFF;
@@ -1756,6 +1757,23 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                 codecRecoveryType.compareAndSet(CR_RECOVERY_TYPE_FLUSH, CR_RECOVERY_TYPE_RESTART);
             }
         }
+    }
+
+    // Live in-stream HDR peak override (from the quick menu). Pass -1 to fall back to the
+    // "HDR peak brightness" setting. Triggers a codec restart so the new mastering peak is
+    // applied immediately (only meaningful while an HDR stream is active).
+    public void setLiveHdrPeakNits(int nits) {
+        liveHdrPeakNits = nits;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && currentHdrMetadata != null) {
+            codecRecoveryAttempts = 0;
+            if (!codecRecoveryType.compareAndSet(CR_RECOVERY_TYPE_NONE, CR_RECOVERY_TYPE_RESTART)) {
+                codecRecoveryType.compareAndSet(CR_RECOVERY_TYPE_FLUSH, CR_RECOVERY_TYPE_RESTART);
+            }
+        }
+    }
+
+    public int getLiveHdrPeakNits() {
+        return liveHdrPeakNits;
     }
 
     private boolean queueNextInputBuffer(long timestampUs, int codecFlags) {

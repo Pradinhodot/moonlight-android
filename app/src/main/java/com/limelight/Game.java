@@ -3765,6 +3765,17 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         decoderRenderer.setHdrMode(enabled, hdrMetadata);
     }
 
+    // Live in-stream HDR peak control (from the quick menu). nits<=0 = Automatic.
+    public void setLiveHdrPeak(int nits) {
+        if (decoderRenderer != null) {
+            decoderRenderer.setLiveHdrPeakNits(nits);
+        }
+    }
+
+    public int getLiveHdrPeak() {
+        return decoderRenderer != null ? decoderRenderer.getLiveHdrPeakNits() : -1;
+    }
+
     @Override
     public void setMotionEventState(short controllerNumber, byte motionType, short reportRateHz) {
         controllerHandler.handleSetMotionEventState(controllerNumber, motionType, reportRateHz);

@@ -624,6 +624,7 @@
     <string name="pref_error_occurred">An error occurred: </string>
     <string name="pref_save_keyboard_profile">Save OSK profile</string>
     <string name="game_menu_advanced">Advanced Menu</string>
+    <string name="game_menu_hdr_peak">HDR peak brightness</string>
     <string name="game_dialog_title_quit_confirm">Really want to quit?</string>
     <string name="game_dialog_message_quit_confirm">Please make sure you have no unsaved progress. Quitting the session will terminate your current running application.</string>
     <string name="game_menu_quit_session">Quit Session</string>

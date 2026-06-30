@@ -325,12 +325,70 @@ public class GameMenu implements Game.GameMenuCallbacks {
                     game::rotateScreen));
         }
 
+        options.add(new MenuOption(getString(R.string.game_menu_hdr_peak),
+                this::showHdrPeakDialog));
+
         options.add(new MenuOption(getString(R.string.game_menu_advanced), true,
                 () -> showAdvancedMenu(device)));
 
         options.add(new MenuOption(getString(R.string.game_menu_cancel), null));
 
         showMenuDialog(getString(R.string.quick_menu_title), options.toArray(new MenuOption[options.size()]));
+    }
+
+    private String hdrPeakLabel(int nits) {
+        return getString(R.string.game_menu_hdr_peak) + ": " + (nits <= 0 ? "Auto" : (nits + " nits"));
+    }
+
+    // In-stream HDR peak slider (0 = Auto, otherwise force a mastering peak). Applies live.
+    private void showHdrPeakDialog() {
+        final int MAX = 2000;
+        final int STEP = 50;
+
+        int current = game.getLiveHdrPeak();
+        if (current < 0) {
+            current = PreferenceConfiguration.readPreferences(game).hdrPeakNits;
+        }
+        if (current < 0) current = 0;
+        if (current > MAX) current = MAX;
+
+        int themeResId = game.getApplicationInfo().theme;
+        Context themedContext = new ContextThemeWrapper(dialogScreenContext, themeResId);
+
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(themedContext);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = Math.round(20 * themedContext.getResources().getDisplayMetrics().density);
+        layout.setPadding(pad, pad, pad, pad);
+
+        final android.widget.TextView label = new android.widget.TextView(themedContext);
+        label.setText(hdrPeakLabel(current));
+
+        final android.widget.SeekBar seek = new android.widget.SeekBar(themedContext);
+        seek.setMax(MAX / STEP);
+        seek.setProgress(current / STEP);
+        seek.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar s, int progress, boolean fromUser) {
+                label.setText(hdrPeakLabel(progress * STEP));
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar s) {}
+            @Override public void onStopTrackingTouch(android.widget.SeekBar s) {
+                game.setLiveHdrPeak(s.getProgress() * STEP);
+            }
+        });
+
+        layout.addView(label);
+        layout.addView(seek);
+
+        if (currentDialog != null) {
+            currentDialog.dismiss();
+        }
+        currentDialog = new AlertDialog.Builder(themedContext)
+                .setTitle(R.string.game_menu_hdr_peak)
+                .setView(layout)
+                .setPositiveButton(android.R.string.ok, (d, w) -> game.setLiveHdrPeak(seek.getProgress() * STEP))
+                .setNegativeButton(R.string.game_menu_cancel, null)
+                .setOnCancelListener(d -> hideMenu())
+                .show();
     }
 
     @Override
