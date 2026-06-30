@@ -3943,10 +3943,11 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                String hdr = (decoderRenderer != null) ? decoderRenderer.getHdrStatusString() : null;
                 if(prefConfig.enablePerfOverlayLite){
-                    performanceOverlayLite.setText(text);
+                    performanceOverlayLite.setText((hdr != null && !hdr.isEmpty()) ? (text + "  " + hdr) : text);
                 }else{
-                    performanceOverlayBig.setText(text);
+                    performanceOverlayBig.setText((hdr != null && !hdr.isEmpty()) ? (text + "\n" + hdr) : text);
                 }
             }
         });

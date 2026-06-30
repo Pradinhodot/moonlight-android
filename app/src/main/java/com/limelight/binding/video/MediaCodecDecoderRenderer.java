@@ -117,6 +117,7 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     private boolean submittedCsd;
     private byte[] currentHdrMetadata;
     private volatile int liveHdrPeakNits = -1; // -1 = use the preference; >=0 = live in-stream override
+    private volatile String hdrOverlayStatus = ""; // shown in the performance overlay
 
     private int nextInputBufferIndex = -1;
     private ByteBuffer nextInputBuffer;
@@ -681,9 +682,14 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
 
                 hdrStaticInfo.rewind();
                 format.setByteBuffer(MediaFormat.KEY_HDR_STATIC_INFO, hdrStaticInfo);
+
+                hdrOverlayStatus = "HDR BT2020/PQ peak=" + (maxMaster & 0xFFFF) + "n";
             }
-            else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                format.removeKey(MediaFormat.KEY_HDR_STATIC_INFO);
+            else {
+                hdrOverlayStatus = "";
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    format.removeKey(MediaFormat.KEY_HDR_STATIC_INFO);
+                }
             }
         }
 
@@ -1774,6 +1780,11 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
 
     public int getLiveHdrPeakNits() {
         return liveHdrPeakNits;
+    }
+
+    // Short HDR status for the performance overlay (empty when not streaming HDR).
+    public String getHdrStatusString() {
+        return hdrOverlayStatus;
     }
 
     private boolean queueNextInputBuffer(long timestampUs, int codecFlags) {
