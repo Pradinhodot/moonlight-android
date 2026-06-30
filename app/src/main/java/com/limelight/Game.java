@@ -901,15 +901,18 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                 try { streamSurfaceView.setZOrderOnTop(false); } catch (Throwable ignored) {}
                 try { streamSurfaceView.setZOrderMediaOverlay(false); } catch (Throwable ignored) {}
 
-                // 2) setFrameRate via reflection (compat < 30)
+                // 2) setFrameRate: pin the display to the stream's frame rate.
+                // On API 31+ we use the 3-arg setFrameRate(rate, compat, CHANGE_FRAME_RATE_ALWAYS)
+                // so an LTPO panel (e.g. the S24's 1-120Hz adaptive screen) actually COMMITS to the
+                // exact rate instead of floating and letting the compositor resample frames -- the main
+                // source of micro-judder at native refresh. We request the stream fps DIRECTLY (not
+                // min(fps, currentMode)): if the panel is currently sitting at 60Hz, min() would lock it
+                // at 60 and it would never switch up to 120. Asking for 120 with FIXED_SOURCE + ALWAYS
+                // makes SurfaceFlinger switch the panel to a matching mode.
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                     float displayHz = 60f;
                     try {
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                            displayHz = currentDisplay.getMode().getRefreshRate();
-                        } else {
-                            displayHz = currentDisplay.getRefreshRate();
-                        }
+                        displayHz = currentDisplay.getMode().getRefreshRate();
                     } catch (Throwable ignored) {}
 
                     float targetFps = (prefConfig != null && prefConfig.fps > 0) ? prefConfig.fps : displayHz;
@@ -925,10 +928,22 @@ public class Game extends AppCompatActivity implements SurfaceHolder.Callback,
                             ? Surface.FRAME_RATE_COMPATIBILITY_DEFAULT
                             : Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE;
 
-                    try {
-                        java.lang.reflect.Method m = SurfaceView.class.getMethod("setFrameRate", float.class, int.class);
-                        m.invoke(streamSurfaceView, Math.min(targetFps, displayHz), compat);
-                    } catch (Throwable ignored) {}
+                    boolean applied = false;
+                    // API 31+ (S): force the actual refresh-rate switch. CHANGE_FRAME_RATE_ALWAYS == 1.
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        try {
+                            java.lang.reflect.Method m3 = SurfaceView.class.getMethod("setFrameRate", float.class, int.class, int.class);
+                            m3.invoke(streamSurfaceView, targetFps, compat, 1 /* Surface.CHANGE_FRAME_RATE_ALWAYS */);
+                            applied = true;
+                        } catch (Throwable ignored) {}
+                    }
+                    // Fallback (API 30, or if the 3-arg overload is missing): 2-arg hint.
+                    if (!applied) {
+                        try {
+                            java.lang.reflect.Method m = SurfaceView.class.getMethod("setFrameRate", float.class, int.class);
+                            m.invoke(streamSurfaceView, targetFps, compat);
+                        } catch (Throwable ignored) {}
+                    }
                 }
             }
         } catch (Throwable ignored) {}
