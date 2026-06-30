@@ -1249,6 +1249,27 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
                 // Boost thread priority to reduce decoding latency
                 android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
 
+                // CPU affinity (fluidity): keep decode/render work off the little cores. The
+                // scheduler otherwise parks threads on the A520 little cluster -> isolated
+                // frame-time spikes (stutter) unrelated to the network. Pin all app threads to
+                // the perf cluster (big + prime) and re-pin periodically, since cpuset/the kernel
+                // can migrate them back. Behind a toggle; no-op if the native lib fails to load.
+                if (prefs != null && prefs.cpuAffinityEnabled) {
+                    try {
+                        int[] perf = com.limelight.utils.CpuAffinity.detectPerfCpusAvoidPrimeOnly();
+                        if (perf == null || perf.length < 2) {
+                            perf = com.limelight.utils.CpuAffinity.detectBigCores();
+                        }
+                        if (perf != null && perf.length > 0) {
+                            com.limelight.utils.CpuAffinity.pinAllThreadsToCores(perf);
+                            LimeLog.info("CPU affinity: pinned app threads to perf cores " + java.util.Arrays.toString(perf));
+                        }
+                        com.limelight.utils.CpuAffinity.startAffinityWatcher(3000);
+                    } catch (Throwable t) {
+                        LimeLog.warning("CPU affinity setup failed: " + t.getMessage());
+                    }
+                }
+
                 // Compute display refresh and vsync period once (fallback 60 Hz if unavailable)
                 long vsyncPeriodNs;
                 float displayHz = 60f;
@@ -1671,6 +1692,14 @@ public class MediaCodecDecoderRenderer extends VideoDecoderRenderer implements C
     public void prepareForStop() {
         // Let the decoding code know to ignore codec exceptions now
         stopping = true;
+
+        // Release CPU affinity pins and stop the re-pin watcher (restore normal scheduling).
+        if (prefs != null && prefs.cpuAffinityEnabled) {
+            try {
+                com.limelight.utils.CpuAffinity.stopAffinityWatcher();
+                com.limelight.utils.CpuAffinity.clearAllThreadsAffinityAllOnline();
+            } catch (Throwable ignored) {}
+        }
 
         // Halt the rendering thread
         if (rendererThread != null) {

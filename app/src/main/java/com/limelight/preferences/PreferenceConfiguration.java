@@ -70,6 +70,7 @@ public class PreferenceConfiguration {
     private static final String ENABLE_HDR_PREF_STRING = "checkbox_enable_hdr";
     private static final String HDR_PEAK_NITS_PREF_STRING = "seekbar_hdr_peak_nits";
     private static final String SNAPPY_INPUT_PREF_STRING = "checkbox_snappy_input";
+    private static final String CPU_AFFINITY_PREF_STRING = "checkbox_cpu_affinity";
     private static final String ENABLE_PIP_PREF_STRING = "checkbox_enable_pip";
     private static final String ENABLE_PERF_OVERLAY_STRING = "checkbox_enable_perf_overlay";
     private static final String ENABLE_PERF_LOGGING = "checkbox_enable_perf_logging";
@@ -166,6 +167,7 @@ public class PreferenceConfiguration {
     private static final boolean DEFAULT_ENABLE_HDR = false;
     private static final int DEFAULT_HDR_PEAK_NITS = 0; // 0 = Automatic (trust host, fix bogus)
     private static final boolean DEFAULT_SNAPPY_INPUT = false;
+    private static final boolean DEFAULT_CPU_AFFINITY = false;
     private static final boolean DEFAULT_ENABLE_PIP = false;
     private static final boolean DEFAULT_ENABLE_PERF_OVERLAY = false;
     private static final boolean DEFAULT_PERF_OVERLAY_BOTTOM = false;
@@ -269,6 +271,7 @@ public class PreferenceConfiguration {
     public boolean enableHdr;
     public int hdrPeakNits;
     public boolean snappyInput = false;
+    public boolean cpuAffinityEnabled = false;
     public boolean enablePip;
 
     public float parallax_depth;
@@ -927,6 +930,7 @@ private static int getFramePacingValue(Context context) {
         config.enableHdr = prefs.getBoolean(ENABLE_HDR_PREF_STRING, DEFAULT_ENABLE_HDR) && !isShieldAtvFirmwareWithBrokenHdr();
         config.hdrPeakNits = prefs.getInt(HDR_PEAK_NITS_PREF_STRING, DEFAULT_HDR_PEAK_NITS);
         config.snappyInput = prefs.getBoolean(SNAPPY_INPUT_PREF_STRING, DEFAULT_SNAPPY_INPUT);
+        config.cpuAffinityEnabled = prefs.getBoolean(CPU_AFFINITY_PREF_STRING, DEFAULT_CPU_AFFINITY);
         config.enablePip = prefs.getBoolean(ENABLE_PIP_PREF_STRING, DEFAULT_ENABLE_PIP);
         config.enablePerfOverlay = prefs.getBoolean(ENABLE_PERF_OVERLAY_STRING, DEFAULT_ENABLE_PERF_OVERLAY);
         config.enablePerfLogging = prefs.getBoolean(ENABLE_PERF_LOGGING, DEFAULT_ENABLE_PERF_LOGGING);
