@@ -15,6 +15,7 @@ import android.widget.FrameLayout;
 
 import com.limelight.Game;
 import com.limelight.LimeLog;
+import com.limelight.binding.video.SgsrRenderer;
 import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.utils.Stereo3DRenderer;
 
@@ -23,7 +24,7 @@ import com.limelight.utils.Stereo3DRenderer;
  * handles all input callbacks, aspect ratio scaling, and a robust surface lifecycle.
  * It uses SurfaceView for 2D and GLSurfaceView for both 3D modes.
  */
-public class StreamContainer extends FrameLayout implements SurfaceHolder.Callback, Stereo3DRenderer.OnSurfaceReadyListener {
+public class StreamContainer extends FrameLayout implements SurfaceHolder.Callback, Stereo3DRenderer.OnSurfaceReadyListener, SgsrRenderer.OnSgsrSurfaceReadyListener {
 
     public interface InputCallbacks {
         boolean handleKeyUp(KeyEvent event);
@@ -42,6 +43,8 @@ public class StreamContainer extends FrameLayout implements SurfaceHolder.Callba
     private Game game;
     private PreferenceConfiguration prefConfig;
     private Stereo3DRenderer mStereoRenderer;
+    private SgsrRenderer mSgsrRenderer;
+    private boolean sgsrActive = false;
 
     private SurfaceView mSurfaceView;
     private Surface mCurrentSurface;
@@ -71,6 +74,11 @@ public class StreamContainer extends FrameLayout implements SurfaceHolder.Callba
         this.prefConfig = prefConfig;
         this.renderMode = mapIntToStreamMode(prefConfig.renderMode);
 
+        // SGSR upscaler: only in plain 2D mode, when enabled, and when we know the stream
+        // resolution (the decoder input size the shader upscales from).
+        this.sgsrActive = (renderMode == StreamMode.MODE_2D && prefConfig.sgsrEnabled
+                && prefConfig.width > 0 && prefConfig.height > 0);
+
         Stereo3DRenderer.isMovieMode = renderMode == StreamMode.MODE_AI_3D_MOVIE;
 
         isSurfaceReady = false;
@@ -88,6 +96,14 @@ public class StreamContainer extends FrameLayout implements SurfaceHolder.Callba
             glSurfaceView.setEGLContextClientVersion(3);
             mStereoRenderer = new Stereo3DRenderer(glSurfaceView, this, context, prefConfig);
             glSurfaceView.setRenderer(mStereoRenderer);
+            glSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+            mSurfaceView = glSurfaceView;
+            addView(mSurfaceView, childParams);
+        } else if (sgsrActive) {
+            GLSurfaceView glSurfaceView = new GLSurfaceView(context);
+            glSurfaceView.setEGLContextClientVersion(3);
+            mSgsrRenderer = new SgsrRenderer(glSurfaceView, this, prefConfig.width, prefConfig.height, 0.5f);
+            glSurfaceView.setRenderer(mSgsrRenderer);
             glSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
             mSurfaceView = glSurfaceView;
             addView(mSurfaceView, childParams);
@@ -112,7 +128,7 @@ public class StreamContainer extends FrameLayout implements SurfaceHolder.Callba
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        if (renderMode != StreamMode.MODE_2D) {
+        if (renderMode != StreamMode.MODE_2D || sgsrActive) {
             super.onMeasure(widthMeasureSpec, heightMeasureSpec);
             return;
         }
@@ -238,7 +254,9 @@ public class StreamContainer extends FrameLayout implements SurfaceHolder.Callba
     }
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        if (renderMode == StreamMode.MODE_2D && width > 0 && height > 0) {
+        // For the SGSR (and 3D) GL paths the decoder surface comes from the renderer callback,
+        // not from this holder, so only the plain-2D path adopts the holder surface here.
+        if (renderMode == StreamMode.MODE_2D && !sgsrActive && width > 0 && height > 0) {
             mCurrentSurface = holder.getSurface();
             notifySurfaceReady();
         }
@@ -247,7 +265,13 @@ public class StreamContainer extends FrameLayout implements SurfaceHolder.Callba
     }
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
-        if (renderMode == StreamMode.MODE_2D) {
+        if (sgsrActive) {
+            isSurfaceReady = false;
+            mCurrentSurface = null;
+            if (mSgsrRenderer != null) {
+                mSgsrRenderer.release();
+            }
+        } else if (renderMode == StreamMode.MODE_2D) {
             isSurfaceReady = false;
             mCurrentSurface = null;
         } else if (mStereoRenderer != null) {
@@ -265,9 +289,20 @@ public class StreamContainer extends FrameLayout implements SurfaceHolder.Callba
         }
     }
 
+    @Override
+    public void onSgsrSurfaceReady(Surface surface) {
+        if (sgsrActive) {
+            mCurrentSurface = surface;
+            notifySurfaceReady();
+        }
+    }
+
     public void onDestroy() {
         if (mStereoRenderer != null) {
             mStereoRenderer.onSurfaceDestroyed();
+        }
+        if (mSgsrRenderer != null) {
+            mSgsrRenderer.release();
         }
     }
 }

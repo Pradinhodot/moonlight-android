@@ -311,6 +311,8 @@
     <string name="suffix_seekbar_hdr_peak">nits</string>
     <string name="title_checkbox_snappy_input">Snappy Input</string>
     <string name="summary_checkbox_snappy_input">Offload input to a high-priority background thread and ignore tiny axis/trigger deltas for a snappier feel. Experimental.</string>
+    <string name="title_checkbox_sgsr">GPU Upscaling (SGSR)</string>
+    <string name="summary_checkbox_sgsr">Stream at a lower resolution for rock-solid fps and no thermal throttling, then upscale + sharpen on the device GPU. Set a lower stream resolution to benefit. Experimental.</string>
     <string name="title_full_range">Force full range video (Experimental)</string>
     <string name="summary_full_range">This will cause loss of detail in light and dark areas if your device doesn\'t properly display full range video content.</string>
     <string name="title_prevent_packet_loss">Prevent Packet Loss</string>
