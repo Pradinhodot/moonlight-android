@@ -76,8 +76,16 @@ public class StreamContainer extends FrameLayout implements SurfaceHolder.Callba
 
         // SGSR upscaler: only in plain 2D mode, when enabled, and when we know the stream
         // resolution (the decoder input size the shader upscales from).
+        // Disabled under HDR: the GL upscale path is an 8-bit SDR pipeline (RGBA8888 context +
+        // RGBA8 FBO), which would truncate the 10-bit BT2020/PQ HDR signal. With HDR on we fall
+        // back to the direct decoder->SurfaceView path so HDR keeps working. (A 10-bit HDR-capable
+        // GL pipeline is a separate, larger piece of work.)
         this.sgsrActive = (renderMode == StreamMode.MODE_2D && prefConfig.sgsrEnabled
+                && !prefConfig.enableHdr
                 && prefConfig.width > 0 && prefConfig.height > 0);
+        if (prefConfig.sgsrEnabled && prefConfig.enableHdr) {
+            LimeLog.info("SGSR requested but HDR is on -> using direct path (SGSR is SDR-only for now)");
+        }
 
         Stereo3DRenderer.isMovieMode = renderMode == StreamMode.MODE_AI_3D_MOVIE;
 
